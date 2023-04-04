@@ -38,7 +38,7 @@ _LOG = logging.getLogger(__name__)
 
 
 @timeMethod(logger=_LOG, logLevel=VERBOSE)
-def submit(config, wms_workflow, wms_service=None):
+def submit(config, wms_workflow, wms_service=None, remote_build=None, config_file=None):
     """Convert generic workflow to a workflow for a particular WMS.
 
     Parameters
@@ -60,18 +60,26 @@ def submit(config, wms_workflow, wms_service=None):
         wms_service_class = doImport(config["wmsServiceClass"])
         wms_service = wms_service_class(config)
 
-    _, when_create = config.search(".executionButler.whenCreate")
-    if when_create.upper() == "SUBMIT":
-        _, execution_butler_dir = config.search(".bps_defined.executionButlerDir")
-        _LOG.info("Creating execution butler in '%s'", execution_butler_dir)
-        with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed creating execution butler"):
-            _create_execution_butler(
-                config, config["runQgraphFile"], execution_butler_dir, config["submitPath"]
-            )
+    if not remote_build:
+        _, when_create = config.search(".executionButler.whenCreate")
+        if when_create.upper() == "SUBMIT":
+            _, execution_butler_dir = config.search(".bps_defined.executionButlerDir")
+            _LOG.info("Creating execution butler in '%s'", execution_butler_dir)
+            with time_this(
+                log=_LOG, level=logging.INFO, prefix=None, msg="Completed creating execution butler"
+            ):
+                _create_execution_butler(
+                    config, config["runQgraphFile"], execution_butler_dir, config["submitPath"]
+                )
 
     _LOG.info("Submitting run to a workflow management system for execution")
     with time_this(
         log=_LOG, level=logging.INFO, prefix=None, msg="Completed submitting to a workflow management system"
     ):
-        workflow = wms_service.submit(wms_workflow)
+        if remote_build:
+            workflow = wms_service.submit(
+                wms_workflow, config=config, remote_build=remote_build, config_file=config_file
+            )
+        else:
+            workflow = wms_service.submit(wms_workflow)
     return workflow
