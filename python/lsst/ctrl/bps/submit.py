@@ -38,7 +38,7 @@ _LOG = logging.getLogger(__name__)
 
 
 @timeMethod(logger=_LOG, logLevel=VERBOSE)
-def submit(config, wms_workflow, wms_service=None, remote_build=None, config_file=None):
+def submit(config, wms_workflow, wms_service=None, **kwargs):
     """Convert generic workflow to a workflow for a particular WMS.
 
     Parameters
@@ -60,6 +60,9 @@ def submit(config, wms_workflow, wms_service=None, remote_build=None, config_fil
         wms_service_class = doImport(config["wmsServiceClass"])
         wms_service = wms_service_class(config)
 
+    remote_build = kwargs["remote_build"] if "remote_build" in kwargs else None
+    kwargs['config'] = config
+
     if not remote_build:
         _, when_create = config.search(".executionButler.whenCreate")
         if when_create.upper() == "SUBMIT":
@@ -76,10 +79,5 @@ def submit(config, wms_workflow, wms_service=None, remote_build=None, config_fil
     with time_this(
         log=_LOG, level=logging.INFO, prefix=None, msg="Completed submitting to a workflow management system"
     ):
-        if remote_build:
-            workflow = wms_service.submit(
-                wms_workflow, config=config, remote_build=remote_build, config_file=config_file
-            )
-        else:
-            workflow = wms_service.submit(wms_workflow)
+        workflow = wms_service.submit(wms_workflow, **kwargs)
     return workflow

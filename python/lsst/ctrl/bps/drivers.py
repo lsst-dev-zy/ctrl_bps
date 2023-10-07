@@ -417,6 +417,9 @@ def submit_driver(config_file, **kwargs):
                     mem_fmt=DEFAULT_MEM_FMT,
                 ):
                     config = _init_submission_driver(config_file, **kwargs)
+                    kwargs['remote_build'] = remote_build
+                    kwargs['config_file'] = config_file
+                    wms_workflow = None
     else:
         _LOG.info("The workflow is sumitted to the local Data Facility.")
 
@@ -432,6 +435,8 @@ def submit_driver(config_file, **kwargs):
     ):
         if not remote_build:
             wms_workflow_config, wms_workflow = prepare_driver(config_file, **kwargs)
+        else:
+            wms_workflow_config = config
 
         _LOG.info("Starting submit stage")
         with time_this(
@@ -443,10 +448,9 @@ def submit_driver(config_file, **kwargs):
             mem_unit=DEFAULT_MEM_UNIT,
             mem_fmt=DEFAULT_MEM_FMT,
         ):
-            if remote_build:
-                wms_workflow = submit(config, None, remote_build=remote_build, config_file=config_file)
-            else:
-                submit(wms_workflow_config, wms_workflow)
+            workflow = submit(wms_workflow_config, wms_workflow, **kwargs)
+            if not wms_workflow:
+                wms_workflow = workflow
             _LOG.info("Run '%s' submitted for execution with id '%s'", wms_workflow.name, wms_workflow.run_id)
     if _LOG.isEnabledFor(logging.INFO):
         _LOG.info(
