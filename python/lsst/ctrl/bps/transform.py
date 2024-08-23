@@ -996,6 +996,7 @@ def _create_final_command(config, prefix):
         "searchobj": config["finalJob"],
     }
 
+    '''zy
     script_file = os.path.join(prefix, "final_job.bash")
     with open(script_file, "w", encoding="utf8") as fh:
         print("#!/bin/bash\n", file=fh)
@@ -1028,6 +1029,9 @@ def _create_final_command(config, prefix):
             i += 1
             found, command = config.search(f"command{i}", opt=search_opt)
     os.chmod(script_file, 0o755)
+    '''
+    script_file = "test.bash"
+
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
 
     _, orig_butler = config.search("butlerConfig")
