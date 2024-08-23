@@ -1030,7 +1030,7 @@ def _create_final_command(config, prefix):
             found, command = config.search(f"command{i}", opt=search_opt)
     os.chmod(script_file, 0o755)
     '''
-    script_file = "test.bash"
+    script_file = "test.sh"
 
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
 
