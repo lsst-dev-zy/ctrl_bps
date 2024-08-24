@@ -311,6 +311,7 @@ def transform_driver(config_file, **kwargs):
     config, clustered_qgraph = cluster_qgraph_driver(config_file, **kwargs)
     '''
     config = _init_submission_driver(config_file, **kwargs)
+    config["runQgraphFile"] = config["qgraphFileTemplate"]
     submit_path = config[".bps_defined.submitPath"]
 
     _LOG.info("Starting transform stage (creating generic workflow)")
