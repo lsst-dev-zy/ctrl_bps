@@ -436,6 +436,7 @@ def submit_driver(config_file, **kwargs):
                     mem_fmt=DEFAULT_MEM_FMT,
                 ):
                     config = _init_submission_driver(config_file, **kwargs)
+                    config["runQgraphFile"] = config["qgraphFileTemplate"]
                     kwargs["remote_build"] = remote_build
                     kwargs["config_file"] = config_file
                     wms_workflow = None

@@ -609,7 +609,6 @@ def create_generic_workflow(config, name, prefix):
     generic_workflow = GenericWorkflow(name)
     #'''zy
     # Save full run QuantumGraph for use by jobs
-    config["runQgraphFile"] = config["qgraphFileTemplate"]
     generic_workflow.add_file(
         GenericWorkflowFile(
             "runQgraphFile",
