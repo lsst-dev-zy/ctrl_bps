@@ -92,6 +92,7 @@ _LOG = logging.getLogger(__name__)
 
 
 @timeMethod(logger=_LOG, logLevel=VERBOSE)
+'''zy
 def transform(config, cqgraph, prefix):
     """Transform a ClusteredQuantumGraph to a GenericWorkflow.
 
@@ -124,6 +125,25 @@ def transform(config, cqgraph, prefix):
         _, name = config.search("uniqProcName", opt={"required": True})
 
     generic_workflow = create_generic_workflow(config, cqgraph, name, prefix)
+    generic_workflow_config = create_generic_workflow_config(config, prefix)
+
+    return generic_workflow, generic_workflow_config
+'''
+
+def transform(config, prefix):
+    _, when_create = config.search(".executionButler.whenCreate")
+    if when_create.upper() == "TRANSFORM":
+        _, execution_butler_dir = config.search(".bps_defined.executionButlerDir")
+        _LOG.info("Creating execution butler in '%s'", execution_butler_dir)
+        with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Creating execution butler completed"):
+            _create_execution_butler(config, config["runQgraphFile"], execution_butler_dir, prefix)
+
+    if cqgraph.name is not None:
+        name = cqgraph.name
+    else:
+        _, name = config.search("uniqProcName", opt={"required": True})
+
+    generic_workflow = create_generic_workflow(config, name, prefix)
     generic_workflow_config = create_generic_workflow_config(config, prefix)
 
     return generic_workflow, generic_workflow_config
@@ -616,7 +636,7 @@ def _handle_job_values_sum(quantum_job_values, gwjob, attributes=_ATTRS_SUM):
         else:
             setattr(gwjob, attr, current_value + quantum_job_values[attr])
 
-
+'''zy
 def create_generic_workflow(config, cqgraph, name, prefix):
     """Create a generic workflow from a ClusteredQuantumGraph such that it
     has information needed for WMS (e.g., command lines).
@@ -784,6 +804,31 @@ def create_generic_workflow(config, cqgraph, name, prefix):
     add_final_job(config, generic_workflow, prefix)
 
     return generic_workflow
+'''
+def create_generic_workflow(config, name, prefix):
+    # Determine whether saving per-job QuantumGraph files in the loop.
+    _, when_save = config.search("whenSaveJobQgraph", {"default": WhenToSaveQuantumGraphs.TRANSFORM.name})
+    save_qgraph_per_job = WhenToSaveQuantumGraphs[when_save.upper()]
+
+    search_opt = {"replaceVars": False, "expandEnvVars": False, "replaceEnvVars": True, "required": False}
+
+    # Lookup butler values once
+    _, when_create = config.search(".executionButler.whenCreate", opt=search_opt)
+    _, butler_config = config.search("butlerConfig", opt=search_opt)
+    _, execution_butler_dir = config.search(".bps_defined.executionButlerDir", opt=search_opt)
+
+    generic_workflow = GenericWorkflow(name)
+
+    # Cache pipetask specific or more generic job values to minimize number
+    # on config searches.
+    cached_job_values = {}
+    cached_pipetask_values = {}
+
+    # Add final job
+    add_final_job(config, generic_workflow, prefix)
+
+    return generic_workflow
+
 
 
 def create_generic_workflow_config(config, prefix):
@@ -860,7 +905,11 @@ def _add_final_job(config, generic_workflow, prefix):
     """
     _, when_run = config.search(".finalJob.whenRun")
     if when_run.upper() != "NEVER":
+        '''zy
         create_final_job = _make_final_job_creator("finalJob", _create_final_command)
+        '''
+        create_final_job = _make_final_job_creator("CM_final", _create_final_command)
+
         gwjob = create_final_job(config, generic_workflow, prefix)
         if when_run.upper() == "ALWAYS":
             generic_workflow.add_final(gwjob)
