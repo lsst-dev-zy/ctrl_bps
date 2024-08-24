@@ -92,6 +92,21 @@ _LOG = logging.getLogger(__name__)
 
 
 @timeMethod(logger=_LOG, logLevel=VERBOSE)
+def transform(config, prefix):
+    _, when_create = config.search(".executionButler.whenCreate")
+    if when_create.upper() == "TRANSFORM":
+        _, execution_butler_dir = config.search(".bps_defined.executionButlerDir")
+        _LOG.info("Creating execution butler in '%s'", execution_butler_dir)
+        with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Creating execution butler completed"):
+            _create_execution_butler(config, config["runQgraphFile"], execution_butler_dir, prefix)
+
+    _, name = config.search("uniqProcName", opt={"required": True})
+
+    generic_workflow = create_generic_workflow(config, name, prefix)
+    generic_workflow_config = create_generic_workflow_config(config, prefix)
+
+    return generic_workflow, generic_workflow_config
+
 '''zy
 def transform(config, cqgraph, prefix):
     """Transform a ClusteredQuantumGraph to a GenericWorkflow.
@@ -129,25 +144,6 @@ def transform(config, cqgraph, prefix):
 
     return generic_workflow, generic_workflow_config
 '''
-
-def transform(config, prefix):
-    _, when_create = config.search(".executionButler.whenCreate")
-    if when_create.upper() == "TRANSFORM":
-        _, execution_butler_dir = config.search(".bps_defined.executionButlerDir")
-        _LOG.info("Creating execution butler in '%s'", execution_butler_dir)
-        with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Creating execution butler completed"):
-            _create_execution_butler(config, config["runQgraphFile"], execution_butler_dir, prefix)
-
-    if cqgraph.name is not None:
-        name = cqgraph.name
-    else:
-        _, name = config.search("uniqProcName", opt={"required": True})
-
-    generic_workflow = create_generic_workflow(config, name, prefix)
-    generic_workflow_config = create_generic_workflow_config(config, prefix)
-
-    return generic_workflow, generic_workflow_config
-
 
 def add_workflow_init_nodes(config, qgraph, generic_workflow):
     """Add nodes to workflow graph that perform initialization steps.
