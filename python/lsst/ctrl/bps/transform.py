@@ -915,6 +915,7 @@ def _add_merge_job(config, generic_workflow, prefix):
 def add_custom_job(config, generic_workflow, prefix):
     _, when_run = config.search(".finalJob.whenRun")
     create_final_job = _make_final_job_creator("customJob", _create_custom_command)
+    gwjob = create_final_job(config, generic_workflow, prefix)
     generic_workflow.add_custom(gwjob)
 
 def _make_final_job_creator(job_name, create_cmd):
