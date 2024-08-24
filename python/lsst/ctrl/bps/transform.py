@@ -913,9 +913,9 @@ def _add_merge_job(config, generic_workflow, prefix):
             raise ValueError(f"Invalid value for executionButler.whenMerge: {when_merge}")
 
 def add_custom_job(config, generic_workflow, prefix):
-    _, when_run = config.search(".finalJob.whenRun")
-    create_final_job = _make_final_job_creator("customJob", _create_custom_command)
-    gwjob = create_final_job(config, generic_workflow, prefix)
+    _, when_run = config.search(".customJob.whenRun")
+    create_custom_job = _make_final_job_creator("customJob", _create_custom_command)
+    gwjob = create_custom_job(config, generic_workflow, prefix)
     generic_workflow.add_custom(gwjob)
 
 def _make_final_job_creator(job_name, create_cmd):
@@ -958,6 +958,7 @@ def _make_final_job_creator(job_name, create_cmd):
         gwjob = GenericWorkflowJob(job_name, label=job_name)
 
         search_opt = {"searchobj": config[job_name], "curvals": {}, "default": None}
+        print(f"aaaaaaaaaa {config[job_name]}")
         found, value = config.search("computeSite", opt=search_opt)
         if found:
             search_opt["curvals"]["curr_site"] = value
@@ -1125,7 +1126,7 @@ def _create_custom_command(config, prefix):
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
 
     _, orig_butler = config.search("butlerConfig")
-    return executable
+    return executable, f"<FILE:runQgraphFile> {orig_butler}"
 
 def add_final_job_as_sink(generic_workflow, final_job):
     """Add final job as the single sink for the workflow.
