@@ -607,6 +607,18 @@ def create_generic_workflow(config, name, prefix):
     _, execution_butler_dir = config.search(".bps_defined.executionButlerDir", opt=search_opt)
 
     generic_workflow = GenericWorkflow(name)
+    '''zy
+    # Save full run QuantumGraph for use by jobs
+    generic_workflow.add_file(
+        GenericWorkflowFile(
+            "runQgraphFile",
+            src_uri=config["runQgraphFile"],
+            wms_transfer=False,
+            job_access_remote=True,
+            job_shared=True,
+        )
+    )
+    '''
 
     # Cache pipetask specific or more generic job values to minimize number
     # on config searches.
@@ -836,8 +848,8 @@ def _create_final_command(config, prefix):
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
 
     _, orig_butler = config.search("butlerConfig")
-    return executable, f"<FILE:runQgraphFile> {orig_butler}"
-
+    #return executable, f"<FILE:runQgraphFile> {orig_butler}"
+    return executable, f"{orig_butler}"
 
 def _create_merge_command(config, prefix):
     """Create the command and shell script for merging the execution Butler.
