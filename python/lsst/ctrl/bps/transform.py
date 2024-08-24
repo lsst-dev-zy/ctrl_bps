@@ -808,11 +808,11 @@ def _make_final_job_creator(job_name, create_cmd):
         gwjob.executable, gwjob.arguments = create_cmd(config, prefix)
 
         # Determine inputs from command line.
-        '''zy
+        #'''zy
         for file_key in re.findall(r"<FILE:([^>]+)>", gwjob.arguments):
             gwfile = generic_workflow.get_file(file_key)
             generic_workflow.add_job_inputs(gwjob.name, gwfile)
-        '''
+        #'''
         _enhance_command(config, generic_workflow, gwjob, {})
         return gwjob
 
