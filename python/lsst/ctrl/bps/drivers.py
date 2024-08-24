@@ -307,7 +307,11 @@ def transform_driver(config_file, **kwargs):
         Representation of the abstract/scientific workflow specific to a given
         workflow management system.
     """
+
+    '''zy
     config, clustered_qgraph = cluster_qgraph_driver(config_file, **kwargs)
+    '''
+    config = _init_submission_driver(config_file, **kwargs)
     submit_path = config[".bps_defined.submitPath"]
 
     _LOG.info("Starting transform stage (creating generic workflow)")
@@ -319,8 +323,12 @@ def transform_driver(config_file, **kwargs):
         mem_usage=True,
         mem_unit=DEFAULT_MEM_UNIT,
         mem_fmt=DEFAULT_MEM_FMT,
-    ):
+    ):  
+        '''zy
         generic_workflow, generic_workflow_config = transform(config, clustered_qgraph, submit_path)
+        '''
+        generic_workflow, generic_workflow_config = transform(config, submit_path)
+
         _LOG.info("Generic workflow name '%s'", generic_workflow.name)
     if _LOG.isEnabledFor(logging.INFO):
         _LOG.info(
