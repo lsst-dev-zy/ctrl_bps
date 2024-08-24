@@ -694,7 +694,6 @@ def _add_final_job(config, generic_workflow, prefix):
     _, when_run = config.search(".finalJob.whenRun")
     if when_run.upper() != "NEVER":        
         create_final_job = _make_final_job_creator("finalJob", _create_final_command)
-        #create_final_job = _make_final_job_creator("CM_final", _create_final_command)
 
         gwjob = create_final_job(config, generic_workflow, prefix)
         if when_run.upper() == "ALWAYS":
