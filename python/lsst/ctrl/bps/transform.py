@@ -118,7 +118,7 @@ def transform(config, cqgraph, prefix):
         with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Creating execution butler completed"):
             _create_execution_butler(config, config["runQgraphFile"], execution_butler_dir, prefix)
 
-    if cggraph and cqgraph.name is not None:
+    if cqgraph and cqgraph.name is not None:
         name = cqgraph.name
     else:
         _, name = config.search("uniqProcName", opt={"required": True})
