@@ -739,6 +739,25 @@ class GenericWorkflow(DiGraph):
         if isinstance(final, GenericWorkflowJob):
             self.add_executable(final.executable)
 
+    def add_custom(self, custom):
+        """Add special final job/workflow to the generic workflow.
+
+        Parameters
+        ----------
+        final : `lsst.ctrl.bps.GenericWorkflowJob` or \
+                `lsst.ctrl.bps.GenericWorkflow`
+            Information needed to execute the special final job(s), the
+            job(s) to be executed after all jobs that can be executed
+            have been executed regardless of exit status of any of the
+            jobs.
+        """
+        if not isinstance(custom, GenericWorkflowJob) and not isinstance(custom, GenericWorkflow):
+            raise TypeError("Invalid type for GenericWorkflow final ({type(final)})")
+
+        self._custom = custom
+        if isinstance(custom, GenericWorkflowJob):
+            self.add_executable(custom.executable)
+
     def get_final(self):
         """Return job/workflow to be executed after all jobs that can be
         executed have been executed regardless of exit status of any of
@@ -752,6 +771,19 @@ class GenericWorkflow(DiGraph):
         """
         return self._final
 
+    def get_custom(self):
+        """Return job/workflow to be executed after all jobs that can be
+        executed have been executed regardless of exit status of any of
+        the jobs.
+
+        Returns
+        -------
+        final : `lsst.ctrl.bps.GenericWorkflowJob` or \
+                `lsst.ctrl.bps.GenericWorkflow`
+            Information needed to execute final job(s).
+        """
+        return self._custom
+    
     def add_executable(self, executable):
         """Add executable to workflow's list of executables.
 

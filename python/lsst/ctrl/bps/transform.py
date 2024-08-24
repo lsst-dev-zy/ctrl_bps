@@ -92,7 +92,25 @@ _LOG = logging.getLogger(__name__)
 
 
 @timeMethod(logger=_LOG, logLevel=VERBOSE)
-def transform(config, prefix):
+def transform(config, cqgraph, prefix):
+    """Transform a ClusteredQuantumGraph to a GenericWorkflow.
+
+    Parameters
+    ----------
+    config : `lsst.ctrl.bps.BpsConfig`
+        BPS configuration.
+    cqgraph : `lsst.ctrl.bps.ClusteredQuantumGraph`
+        A clustered quantum graph to transform into a generic workflow.
+    prefix : `str`
+        Root path for any output files.
+
+    Returns
+    -------
+    generic_workflow : `lsst.ctrl.bps.GenericWorkflow`
+        The generic workflow transformed from the clustered quantum graph.
+    generic_workflow_config : `lsst.ctrl.bps.BpsConfig`
+        Configuration to accompany GenericWorkflow.
+    """
     _, when_create = config.search(".executionButler.whenCreate")
     if when_create.upper() == "TRANSFORM":
         _, execution_butler_dir = config.search(".bps_defined.executionButlerDir")
@@ -100,12 +118,16 @@ def transform(config, prefix):
         with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Creating execution butler completed"):
             _create_execution_butler(config, config["runQgraphFile"], execution_butler_dir, prefix)
 
-    _, name = config.search("uniqProcName", opt={"required": True})
+    if cqgraph.name is not None:
+        name = cqgraph.name
+    else:
+        _, name = config.search("uniqProcName", opt={"required": True})
 
-    generic_workflow = create_generic_workflow(config, name, prefix)
+    generic_workflow = create_generic_workflow(config, cqgraph, name, prefix)
     generic_workflow_config = create_generic_workflow_config(config, prefix)
 
     return generic_workflow, generic_workflow_config
+
 
 def add_workflow_init_nodes(config, qgraph, generic_workflow):
     """Add nodes to workflow graph that perform initialization steps.
@@ -594,11 +616,33 @@ def _handle_job_values_sum(quantum_job_values, gwjob, attributes=_ATTRS_SUM):
         else:
             setattr(gwjob, attr, current_value + quantum_job_values[attr])
 
-def create_generic_workflow(config, name, prefix):
+
+def create_generic_workflow(config, cqgraph, name, prefix):
+    """Create a generic workflow from a ClusteredQuantumGraph such that it
+    has information needed for WMS (e.g., command lines).
+
+    Parameters
+    ----------
+    config : `lsst.ctrl.bps.BpsConfig`
+        BPS configuration.
+    cqgraph : `lsst.ctrl.bps.ClusteredQuantumGraph`
+        ClusteredQuantumGraph for running a specific pipeline on a specific
+        payload.
+    name : `str`
+        Name for the workflow (typically unique).
+    prefix : `str`
+        Root path for any output files.
+
+    Returns
+    -------
+    generic_workflow : `lsst.ctrl.bps.GenericWorkflow`
+        Generic workflow for the given ClusteredQuantumGraph + config.
+    """
     # Determine whether saving per-job QuantumGraph files in the loop.
     _, when_save = config.search("whenSaveJobQgraph", {"default": WhenToSaveQuantumGraphs.TRANSFORM.name})
     save_qgraph_per_job = WhenToSaveQuantumGraphs[when_save.upper()]
-
+    _, submit_cmd = config.search("submitCmd", opt={"default": False})
+    
     search_opt = {"replaceVars": False, "expandEnvVars": False, "replaceEnvVars": True, "required": False}
 
     # Lookup butler values once
@@ -607,29 +651,156 @@ def create_generic_workflow(config, name, prefix):
     _, execution_butler_dir = config.search(".bps_defined.executionButlerDir", opt=search_opt)
 
     generic_workflow = GenericWorkflow(name)
-    #'''zy
+
     # Save full run QuantumGraph for use by jobs
     generic_workflow.add_file(
         GenericWorkflowFile(
             "runQgraphFile",
             src_uri=config["runQgraphFile"],
-            wms_transfer=False,
+            wms_transfer=True,
             job_access_remote=True,
             job_shared=True,
         )
     )
-    #'''
 
     # Cache pipetask specific or more generic job values to minimize number
     # on config searches.
     cached_job_values = {}
     cached_pipetask_values = {}
 
-    # Add final job
-    add_final_job(config, generic_workflow, prefix)
+    if not submit_cmd :
+        for cluster in cqgraph.clusters():
+            _LOG.debug("Loop over clusters: %s, %s", cluster, type(cluster))
+            _LOG.debug(
+                "cqgraph: name=%s, len=%s, label=%s, ids=%s",
+                cluster.name,
+                len(cluster.qgraph_node_ids),
+                cluster.label,
+                cluster.qgraph_node_ids,
+            )
+
+            gwjob = GenericWorkflowJob(cluster.name, label=cluster.label)
+
+            # First get job values from cluster or cluster config
+            search_opt["curvals"] = {"curr_cluster": cluster.label}
+            found, value = config.search("computeSite", opt=search_opt)
+            if found:
+                search_opt["curvals"]["curr_site"] = value
+            found, value = config.search("computeCloud", opt=search_opt)
+            if found:
+                search_opt["curvals"]["curr_cloud"] = value
+
+            # If some config values are set for this cluster
+            if cluster.label not in cached_job_values:
+                _LOG.debug("config['cluster'][%s] = %s", cluster.label, config["cluster"][cluster.label])
+                cached_job_values[cluster.label] = {}
+
+                # Allowing whenSaveJobQgraph and useLazyCommands per cluster label.
+                key = "whenSaveJobQgraph"
+                _, when_save = config.search(key, opt=search_opt)
+                cached_job_values[cluster.label][key] = WhenToSaveQuantumGraphs[when_save.upper()]
+
+                key = "useLazyCommands"
+                search_opt["default"] = True
+                _, cached_job_values[cluster.label][key] = config.search(key, opt=search_opt)
+                del search_opt["default"]
+
+                if cluster.label in config["cluster"]:
+                    # Don't want to get global defaults here so only look in
+                    # cluster section.
+                    cached_job_values[cluster.label].update(
+                        _get_job_values(config["cluster"][cluster.label], search_opt, "runQuantumCommand")
+                    )
+            cluster_job_values = copy.copy(cached_job_values[cluster.label])
+
+            cluster_job_values["name"] = cluster.name
+            cluster_job_values["label"] = cluster.label
+            cluster_job_values["quanta_counts"] = cluster.quanta_counts
+            cluster_job_values["tags"] = cluster.tags
+            _LOG.debug("cluster_job_values = %s", cluster_job_values)
+            _handle_job_values(cluster_job_values, gwjob, cluster_job_values.keys())
+
+            # For purposes of whether to continue searching for a value is whether
+            # the value evaluates to False.
+            unset_attributes = {attr for attr in _ATTRS_ALL if not getattr(gwjob, attr)}
+
+            _LOG.debug("unset_attributes=%s", unset_attributes)
+            _LOG.debug("set=%s", _ATTRS_ALL - unset_attributes)
+
+            # For job info not defined at cluster level, attempt to get job info
+            # either common or aggregate for all Quanta in cluster.
+            for node_id in iter(cluster.qgraph_node_ids):
+                _LOG.debug("node_id=%s", node_id)
+                qnode = cqgraph.get_quantum_node(node_id)
+
+                if qnode.taskDef.label not in cached_pipetask_values:
+                    search_opt["curvals"]["curr_pipetask"] = qnode.taskDef.label
+                    cached_pipetask_values[qnode.taskDef.label] = _get_job_values(
+                        config, search_opt, "runQuantumCommand"
+                    )
+
+                _handle_job_values(cached_pipetask_values[qnode.taskDef.label], gwjob, unset_attributes)
+
+            # Update job with workflow attribute and profile values.
+            qgraph_gwfile = _get_qgraph_gwfile(
+                config, save_qgraph_per_job, gwjob, generic_workflow.get_file("runQgraphFile"), prefix
+            )
+            butler_gwfile = _get_butler_gwfile(prefix, when_create, butler_config, execution_butler_dir)
+
+            generic_workflow.add_job(gwjob)
+            generic_workflow.add_job_inputs(gwjob.name, [qgraph_gwfile, butler_gwfile])
+
+            gwjob.cmdvals["qgraphId"] = cqgraph.qgraph.graphID
+            gwjob.cmdvals["qgraphNodeId"] = ",".join(
+                sorted([f"{node_id}" for node_id in cluster.qgraph_node_ids])
+            )
+            _enhance_command(config, generic_workflow, gwjob, cached_job_values)
+
+            # If writing per-job QuantumGraph files during TRANSFORM stage,
+            # write it now while in memory.
+            if save_qgraph_per_job == WhenToSaveQuantumGraphs.TRANSFORM:
+                save_qg_subgraph(cqgraph.qgraph, qgraph_gwfile.src_uri, cluster.qgraph_node_ids)
+
+        # Create job dependencies.
+        for parent in cqgraph.clusters():
+            for child in cqgraph.successors(parent):
+                generic_workflow.add_job_relationships(parent.name, child.name)
+
+        # Add initial workflow.
+        if config.get("runInit", "{default: False}"):
+            add_workflow_init_nodes(config, cqgraph.qgraph, generic_workflow)
+
+        generic_workflow.run_attrs.update(
+            {
+                "bps_isjob": "True",
+                "bps_project": config["project"],
+                "bps_campaign": config["campaign"],
+                "bps_run": generic_workflow.name,
+                "bps_operator": config["operator"],
+                "bps_payload": config["payloadName"],
+                "bps_runsite": config["computeSite"],
+            }
+        )
+
+        # Add final job
+        add_final_job(config, generic_workflow, prefix)
+
+    else:
+        generic_workflow.run_attrs.update(
+            {
+                "bps_isjob": "True",
+                "bps_project": config["project"],
+                "bps_campaign": config["campaign"],
+                "bps_run": generic_workflow.name,
+                "bps_operator": config["operator"],
+                "bps_payload": config["payloadName"],
+                "bps_runsite": config["computeSite"],
+            }
+        )
+        # Add CM_custom job
+        add_custom_job(config, generic_workflow, prefix)
 
     return generic_workflow
-
 
 def create_generic_workflow_config(config, prefix):
     """Create generic workflow configuration.
@@ -650,7 +821,6 @@ def create_generic_workflow_config(config, prefix):
     generic_workflow_config["workflowName"] = config["uniqProcName"]
     generic_workflow_config["workflowPath"] = prefix
     return generic_workflow_config
-
 
 def add_final_job(config, generic_workflow, prefix):
     """Add final workflow job depending upon configuration.
@@ -685,7 +855,6 @@ def add_final_job(config, generic_workflow, prefix):
         raise RuntimeError("Final job specification not found")
     func(config, generic_workflow, prefix)
 
-
 def _add_final_job(config, generic_workflow, prefix):
     """Add the final job.
 
@@ -704,9 +873,8 @@ def _add_final_job(config, generic_workflow, prefix):
         Directory in which to output final script.
     """
     _, when_run = config.search(".finalJob.whenRun")
-    if when_run.upper() != "NEVER":        
+    if when_run.upper() != "NEVER":
         create_final_job = _make_final_job_creator("finalJob", _create_final_command)
-
         gwjob = create_final_job(config, generic_workflow, prefix)
         if when_run.upper() == "ALWAYS":
             generic_workflow.add_final(gwjob)
@@ -714,7 +882,6 @@ def _add_final_job(config, generic_workflow, prefix):
             add_final_job_as_sink(generic_workflow, gwjob)
         else:
             raise ValueError(f"Invalid value for finalJob.whenRun: {when_run}")
-
 
 def _add_merge_job(config, generic_workflow, prefix):
     """Add job responsible for merging back the execution Butler.
@@ -745,6 +912,10 @@ def _add_merge_job(config, generic_workflow, prefix):
         else:
             raise ValueError(f"Invalid value for executionButler.whenMerge: {when_merge}")
 
+def add_custom_job(config, generic_workflow, prefix):
+    _, when_run = config.search(".finalJob.whenRun")
+    create_final_job = _make_final_job_creator("customJob", _create_custom_command)
+    generic_workflow.add_custom(gwjob)
 
 def _make_final_job_creator(job_name, create_cmd):
     """Construct a function that creates the final job.
@@ -808,16 +979,14 @@ def _make_final_job_creator(job_name, create_cmd):
         gwjob.executable, gwjob.arguments = create_cmd(config, prefix)
 
         # Determine inputs from command line.
-        #'''zy
         for file_key in re.findall(r"<FILE:([^>]+)>", gwjob.arguments):
             gwfile = generic_workflow.get_file(file_key)
             generic_workflow.add_job_inputs(gwjob.name, gwfile)
-        #'''
+
         _enhance_command(config, generic_workflow, gwjob, {})
         return gwjob
 
     return create_final_job
-
 
 def _create_final_command(config, prefix):
     """Create the command and shell script for the final job.
@@ -843,13 +1012,42 @@ def _create_final_command(config, prefix):
         "searchobj": config["finalJob"],
     }
 
-    script_file = "test.sh"
+    script_file = os.path.join(prefix, "final_job.bash")
+    with open(script_file, "w", encoding="utf8") as fh:
+        print("#!/bin/bash\n", file=fh)
+        print("set -e", file=fh)
+        print("set -x", file=fh)
 
+        print("qgraphFile=$1", file=fh)
+        print("butlerConfig=$2", file=fh)
+
+        i = 1
+        found, command = config.search(f"command{i}", opt=search_opt)
+        while found:
+            # Temporarily replace any env vars so formatter doesn't try to
+            # replace them.
+            command = re.sub(r"\${([^}]+)}", r"<BPSTMP:\1>", command)
+
+            # butlerConfig will be args to script and set to env vars
+            command = command.replace("{qgraphFile}", "<BPSTMP:qgraphFile>")
+            command = command.replace("{butlerConfig}", "<BPSTMP:butlerConfig>")
+
+            # Replace all other vars in command string
+            search_opt["replaceVars"] = True
+            command = config.formatter.format(command, config, search_opt)
+            search_opt["replaceVars"] = False
+
+            # Replace any temporary env placeholders.
+            command = re.sub(r"<BPSTMP:([^>]+)>", r"${\1}", command)
+
+            print(command, file=fh)
+            i += 1
+            found, command = config.search(f"command{i}", opt=search_opt)
+    os.chmod(script_file, 0o755)
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
 
     _, orig_butler = config.search("butlerConfig")
     return executable, f"<FILE:runQgraphFile> {orig_butler}"
-    #return executable, f"{orig_butler}"
 
 def _create_merge_command(config, prefix):
     """Create the command and shell script for merging the execution Butler.
@@ -914,6 +1112,19 @@ def _create_merge_command(config, prefix):
     # The execution butler was saved as butlerConfig in the workflow.
     return executable, f"{orig_butler} <FILE:butlerConfig>"
 
+def _create_custom_command(config, prefix):
+    search_opt = {
+        "replaceVars": False,
+        "replaceEnvVars": False,
+        "expandEnvVars": False,
+        "searchobj": config["finalJob"],
+    }
+
+    script_file = "custom_job.bash"
+    executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
+
+    _, orig_butler = config.search("butlerConfig")
+    return executable
 
 def add_final_job_as_sink(generic_workflow, final_job):
     """Add final job as the single sink for the workflow.

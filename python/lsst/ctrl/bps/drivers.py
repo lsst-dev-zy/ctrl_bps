@@ -260,37 +260,42 @@ def cluster_qgraph_driver(config_file, **kwargs):
         A graph representing clustered quanta.
     """
     config, qgraph = acquire_qgraph_driver(config_file, **kwargs)
+    _, submit_cmd = config.search("submitCmd", opt={"default": False})
+    
+    if submit_cmd:
+        clustered_qgraph = None
+    else:
+        _LOG.info("Starting cluster stage (grouping quanta into jobs)")
+        with time_this(
+            log=_LOG,
+            level=logging.INFO,
+            prefix=None,
+            msg="Cluster stage completed",
+            mem_usage=True,
+            mem_unit=DEFAULT_MEM_UNIT,
+            mem_fmt=DEFAULT_MEM_FMT,
+        ):
+            clustered_qgraph = cluster_quanta(config, qgraph, config["uniqProcName"])
+        if _LOG.isEnabledFor(logging.INFO):
+            _LOG.info(
+                "Peak memory usage for bps process %s (main), %s (largest child process)",
+                *tuple(f"{val.to(DEFAULT_MEM_UNIT):{DEFAULT_MEM_FMT}}" for val in get_peak_mem_usage()),
+            )
+        _LOG.info("ClusteredQuantumGraph contains %d cluster(s)", len(clustered_qgraph))
 
-    _LOG.info("Starting cluster stage (grouping quanta into jobs)")
-    with time_this(
-        log=_LOG,
-        level=logging.INFO,
-        prefix=None,
-        msg="Cluster stage completed",
-        mem_usage=True,
-        mem_unit=DEFAULT_MEM_UNIT,
-        mem_fmt=DEFAULT_MEM_FMT,
-    ):
-        clustered_qgraph = cluster_quanta(config, qgraph, config["uniqProcName"])
-    if _LOG.isEnabledFor(logging.INFO):
-        _LOG.info(
-            "Peak memory usage for bps process %s (main), %s (largest child process)",
-            *tuple(f"{val.to(DEFAULT_MEM_UNIT):{DEFAULT_MEM_FMT}}" for val in get_peak_mem_usage()),
-        )
-    _LOG.info("ClusteredQuantumGraph contains %d cluster(s)", len(clustered_qgraph))
-
-    submit_path = config[".bps_defined.submitPath"]
-    _, save_clustered_qgraph = config.search("saveClusteredQgraph", opt={"default": False})
-    if save_clustered_qgraph:
-        clustered_qgraph.save(os.path.join(submit_path, "bps_clustered_qgraph.pickle"))
-    _, save_dot = config.search("saveDot", opt={"default": False})
-    if save_dot:
-        clustered_qgraph.draw(os.path.join(submit_path, "bps_clustered_qgraph.dot"))
+        submit_path = config[".bps_defined.submitPath"]
+        _, save_clustered_qgraph = config.search("saveClusteredQgraph", opt={"default": False})
+        if save_clustered_qgraph:
+            clustered_qgraph.save(os.path.join(submit_path, "bps_clustered_qgraph.pickle"))
+        _, save_dot = config.search("saveDot", opt={"default": False})
+        if save_dot:
+            clustered_qgraph.draw(os.path.join(submit_path, "bps_clustered_qgraph.dot"))
     return config, clustered_qgraph
 
 
 def transform_driver(config_file, **kwargs):
     """Create a workflow for a specific workflow management system.
+
     Parameters
     ----------
     config_file : `str`
@@ -306,12 +311,7 @@ def transform_driver(config_file, **kwargs):
         Representation of the abstract/scientific workflow specific to a given
         workflow management system.
     """
-
-    '''zy
     config, clustered_qgraph = cluster_qgraph_driver(config_file, **kwargs)
-    '''
-    config = _init_submission_driver(config_file, **kwargs)
-    config["runQgraphFile"] = config["qgraphFileTemplate"]
     submit_path = config[".bps_defined.submitPath"]
 
     _LOG.info("Starting transform stage (creating generic workflow)")
@@ -323,12 +323,8 @@ def transform_driver(config_file, **kwargs):
         mem_usage=True,
         mem_unit=DEFAULT_MEM_UNIT,
         mem_fmt=DEFAULT_MEM_FMT,
-    ):  
-        '''zy
+    ):
         generic_workflow, generic_workflow_config = transform(config, clustered_qgraph, submit_path)
-        '''
-        generic_workflow, generic_workflow_config = transform(config, submit_path)
-
         _LOG.info("Generic workflow name '%s'", generic_workflow.name)
     if _LOG.isEnabledFor(logging.INFO):
         _LOG.info(
@@ -437,7 +433,6 @@ def submit_driver(config_file, **kwargs):
                     mem_fmt=DEFAULT_MEM_FMT,
                 ):
                     config = _init_submission_driver(config_file, **kwargs)
-                    config["runQgraphFile"] = config["qgraphFileTemplate"]
                     kwargs["remote_build"] = remote_build
                     kwargs["config_file"] = config_file
                     wms_workflow = None

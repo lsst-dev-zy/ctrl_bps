@@ -74,58 +74,63 @@ def acquire_quantum_graph(config, out_prefix=""):
     if not execution_butler_dir.startswith("/"):
         execution_butler_dir = os.path.join(config["submitPath"], execution_butler_dir)
     _, when_create = config.search(".executionButler.whenCreate")
-
-    # Check to see if user provided pre-generated QuantumGraph.
-    found, input_qgraph_filename = config.search("qgraphFile")
-    if found and input_qgraph_filename:
-        if out_prefix is not None:
-            # Save a copy of the QuantumGraph file in out_prefix.
-            _LOG.info("Copying quantum graph from '%s'", input_qgraph_filename)
-            with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed copying quantum graph"):
-                qgraph_filename = os.path.join(out_prefix, os.path.basename(input_qgraph_filename))
-                shutil.copy2(input_qgraph_filename, qgraph_filename)
-        else:
-            # Use QuantumGraph file in original given location.
-            qgraph_filename = input_qgraph_filename
-
-        # Update the output run in the user provided quantum graph.
-        if "finalJob" in config:
-            update_quantum_graph(config, qgraph_filename, out_prefix)
-
-        # Copy Execution Butler if user provided (shouldn't provide execution
-        # butler if not providing QuantumGraph)
-        if when_create.upper() == "USER_PROVIDED":
-            found, user_exec_butler_dir = config.search(".executionButler.executionButlerDir")
-            if not found:
-                raise KeyError("Missing .executionButler.executionButlerDir for when_create == USER_PROVIDED")
-
-            # Save a copy of the execution butler file in out_prefix.
-            _LOG.info("Copying execution butler to '%s'", user_exec_butler_dir)
-            with time_this(
-                log=_LOG, level=logging.INFO, prefix=None, msg="Completed copying execution butler"
-            ):
-                shutil.copytree(user_exec_butler_dir, execution_butler_dir)
+    _, submit_cmd = config.search("submitCmd", opt={"default": False})
+    
+    if submit_cmd:
+        qgraph_filename = config["qgraphFileTemplate"] 
+        qgraph = None
     else:
-        if when_create.upper() == "USER_PROVIDED":
-            raise KeyError("Missing qgraphFile to go with provided executionButlerDir")
+        # Check to see if user provided pre-generated QuantumGraph.
+        found, input_qgraph_filename = config.search("qgraphFile")
+        if found and input_qgraph_filename:
+            if out_prefix is not None:
+                # Save a copy of the QuantumGraph file in out_prefix.
+                _LOG.info("Copying quantum graph from '%s'", input_qgraph_filename)
+                with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed copying quantum graph"):
+                    qgraph_filename = os.path.join(out_prefix, os.path.basename(input_qgraph_filename))
+                    shutil.copy2(input_qgraph_filename, qgraph_filename)
+            else:
+                # Use QuantumGraph file in original given location.
+                qgraph_filename = input_qgraph_filename
 
-        # Run command to create the QuantumGraph.
-        _LOG.info("Creating quantum graph")
-        with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed creating quantum graph"):
-            qgraph_filename = create_quantum_graph(config, out_prefix)
+            # Update the output run in the user provided quantum graph.
+            if "finalJob" in config:
+                update_quantum_graph(config, qgraph_filename, out_prefix)
 
-    _LOG.info("Reading quantum graph from '%s'", qgraph_filename)
-    with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed reading quantum graph"):
-        qgraph = QuantumGraph.loadUri(qgraph_filename)
+            # Copy Execution Butler if user provided (shouldn't provide execution
+            # butler if not providing QuantumGraph)
+            if when_create.upper() == "USER_PROVIDED":
+                found, user_exec_butler_dir = config.search(".executionButler.executionButlerDir")
+                if not found:
+                    raise KeyError("Missing .executionButler.executionButlerDir for when_create == USER_PROVIDED")
 
-    if when_create.upper() == "QGRAPH_CMDLINE":
-        if not os.path.exists(execution_butler_dir):
-            raise OSError(
-                f"Missing execution butler dir ({execution_butler_dir}) after "
-                "creating QuantumGraph (whenMakeExecutionButler == QGRAPH_CMDLINE"
-            )
-    elif when_create.upper() == "ACQUIRE":
-        _create_execution_butler(config, qgraph_filename, execution_butler_dir, config["submitPath"])
+                # Save a copy of the execution butler file in out_prefix.
+                _LOG.info("Copying execution butler to '%s'", user_exec_butler_dir)
+                with time_this(
+                    log=_LOG, level=logging.INFO, prefix=None, msg="Completed copying execution butler"
+                ):
+                    shutil.copytree(user_exec_butler_dir, execution_butler_dir)
+        else:
+            if when_create.upper() == "USER_PROVIDED":
+                raise KeyError("Missing qgraphFile to go with provided executionButlerDir")
+
+            # Run command to create the QuantumGraph.
+            _LOG.info("Creating quantum graph")
+            with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed creating quantum graph"):
+                qgraph_filename = create_quantum_graph(config, out_prefix)
+
+        _LOG.info("Reading quantum graph from '%s'", qgraph_filename)
+        with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed reading quantum graph"):
+            qgraph = QuantumGraph.loadUri(qgraph_filename)
+
+        if when_create.upper() == "QGRAPH_CMDLINE":
+            if not os.path.exists(execution_butler_dir):
+                raise OSError(
+                    f"Missing execution butler dir ({execution_butler_dir}) after "
+                    "creating QuantumGraph (whenMakeExecutionButler == QGRAPH_CMDLINE"
+                )
+        elif when_create.upper() == "ACQUIRE":
+            _create_execution_butler(config, qgraph_filename, execution_butler_dir, config["submitPath"])
 
     return qgraph_filename, qgraph, execution_butler_dir
 
