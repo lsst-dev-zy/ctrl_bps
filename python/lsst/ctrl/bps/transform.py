@@ -695,7 +695,7 @@ def _add_final_job(config, generic_workflow, prefix):
     if when_run.upper() != "NEVER":        
         create_final_job = _make_final_job_creator("finalJob", _create_final_command)
         #create_final_job = _make_final_job_creator("CM_final", _create_final_command)
-        
+
         gwjob = create_final_job(config, generic_workflow, prefix)
         if when_run.upper() == "ALWAYS":
             generic_workflow.add_final(gwjob)
@@ -797,10 +797,11 @@ def _make_final_job_creator(job_name, create_cmd):
         gwjob.executable, gwjob.arguments = create_cmd(config, prefix)
 
         # Determine inputs from command line.
+        '''zy
         for file_key in re.findall(r"<FILE:([^>]+)>", gwjob.arguments):
             gwfile = generic_workflow.get_file(file_key)
             generic_workflow.add_job_inputs(gwjob.name, gwfile)
-
+        '''
         _enhance_command(config, generic_workflow, gwjob, {})
         return gwjob
 
@@ -831,40 +832,6 @@ def _create_final_command(config, prefix):
         "searchobj": config["finalJob"],
     }
 
-    '''zy
-    script_file = os.path.join(prefix, "final_job.bash")
-    with open(script_file, "w", encoding="utf8") as fh:
-        print("#!/bin/bash\n", file=fh)
-        print("set -e", file=fh)
-        print("set -x", file=fh)
-
-        print("qgraphFile=$1", file=fh)
-        print("butlerConfig=$2", file=fh)
-
-        i = 1
-        found, command = config.search(f"command{i}", opt=search_opt)
-        while found:
-            # Temporarily replace any env vars so formatter doesn't try to
-            # replace them.
-            command = re.sub(r"\${([^}]+)}", r"<BPSTMP:\1>", command)
-
-            # butlerConfig will be args to script and set to env vars
-            command = command.replace("{qgraphFile}", "<BPSTMP:qgraphFile>")
-            command = command.replace("{butlerConfig}", "<BPSTMP:butlerConfig>")
-
-            # Replace all other vars in command string
-            search_opt["replaceVars"] = True
-            command = config.formatter.format(command, config, search_opt)
-            search_opt["replaceVars"] = False
-
-            # Replace any temporary env placeholders.
-            command = re.sub(r"<BPSTMP:([^>]+)>", r"${\1}", command)
-
-            print(command, file=fh)
-            i += 1
-            found, command = config.search(f"command{i}", opt=search_opt)
-    os.chmod(script_file, 0o755)
-    '''
     script_file = "test.sh"
 
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
