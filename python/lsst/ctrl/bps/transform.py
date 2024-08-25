@@ -642,7 +642,7 @@ def create_generic_workflow(config, cqgraph, name, prefix):
     _, when_save = config.search("whenSaveJobQgraph", {"default": WhenToSaveQuantumGraphs.TRANSFORM.name})
     save_qgraph_per_job = WhenToSaveQuantumGraphs[when_save.upper()]
     _, submit_cmd = config.search("submitCmd", opt={"default": False})
-    
+
     search_opt = {"replaceVars": False, "expandEnvVars": False, "replaceEnvVars": True, "required": False}
 
     # Lookup butler values once
@@ -668,7 +668,7 @@ def create_generic_workflow(config, cqgraph, name, prefix):
     cached_job_values = {}
     cached_pipetask_values = {}
 
-    if not submit_cmd :
+    if not submit_cmd:
         for cluster in cqgraph.clusters():
             _LOG.debug("Loop over clusters: %s, %s", cluster, type(cluster))
             _LOG.debug(
@@ -802,6 +802,7 @@ def create_generic_workflow(config, cqgraph, name, prefix):
 
     return generic_workflow
 
+
 def create_generic_workflow_config(config, prefix):
     """Create generic workflow configuration.
 
@@ -821,6 +822,7 @@ def create_generic_workflow_config(config, prefix):
     generic_workflow_config["workflowName"] = config["uniqProcName"]
     generic_workflow_config["workflowPath"] = prefix
     return generic_workflow_config
+
 
 def add_final_job(config, generic_workflow, prefix):
     """Add final workflow job depending upon configuration.
@@ -855,6 +857,7 @@ def add_final_job(config, generic_workflow, prefix):
         raise RuntimeError("Final job specification not found")
     func(config, generic_workflow, prefix)
 
+
 def _add_final_job(config, generic_workflow, prefix):
     """Add the final job.
 
@@ -882,6 +885,7 @@ def _add_final_job(config, generic_workflow, prefix):
             add_final_job_as_sink(generic_workflow, gwjob)
         else:
             raise ValueError(f"Invalid value for finalJob.whenRun: {when_run}")
+
 
 def _add_merge_job(config, generic_workflow, prefix):
     """Add job responsible for merging back the execution Butler.
@@ -912,11 +916,13 @@ def _add_merge_job(config, generic_workflow, prefix):
         else:
             raise ValueError(f"Invalid value for executionButler.whenMerge: {when_merge}")
 
+
 def add_custom_job(config, generic_workflow, prefix):
     _, when_run = config.search(".customJob.whenRun")
     create_custom_job = _make_final_job_creator("customJob", _create_custom_command)
     gwjob = create_custom_job(config, generic_workflow, prefix)
     generic_workflow.add_custom(gwjob)
+
 
 def _make_final_job_creator(job_name, create_cmd):
     """Construct a function that creates the final job.
@@ -990,6 +996,7 @@ def _make_final_job_creator(job_name, create_cmd):
 
     return create_final_job
 
+
 def _create_final_command(config, prefix):
     """Create the command and shell script for the final job.
 
@@ -1050,6 +1057,7 @@ def _create_final_command(config, prefix):
 
     _, orig_butler = config.search("butlerConfig")
     return executable, f"<FILE:runQgraphFile> {orig_butler}"
+
 
 def _create_merge_command(config, prefix):
     """Create the command and shell script for merging the execution Butler.
@@ -1114,19 +1122,14 @@ def _create_merge_command(config, prefix):
     # The execution butler was saved as butlerConfig in the workflow.
     return executable, f"{orig_butler} <FILE:butlerConfig>"
 
-def _create_custom_command(config, prefix):
-    search_opt = {
-        "replaceVars": False,
-        "replaceEnvVars": False,
-        "expandEnvVars": False,
-        "searchobj": config["finalJob"],
-    }
 
+def _create_custom_command(config, prefix):
     script_file = "custom_job.bash"
     executable = GenericWorkflowExec(os.path.basename(script_file), script_file, True)
 
     _, orig_butler = config.search("butlerConfig")
     return executable, f"<FILE:runQgraphFile> {orig_butler}"
+
 
 def add_final_job_as_sink(generic_workflow, final_job):
     """Add final job as the single sink for the workflow.

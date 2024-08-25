@@ -75,9 +75,9 @@ def acquire_quantum_graph(config, out_prefix=""):
         execution_butler_dir = os.path.join(config["submitPath"], execution_butler_dir)
     _, when_create = config.search(".executionButler.whenCreate")
     _, submit_cmd = config.search("submitCmd", opt={"default": False})
-    
+
     if submit_cmd:
-        qgraph_filename = config["qgraphFileTemplate"] 
+        qgraph_filename = config["qgraphFileTemplate"]
         qgraph = None
     else:
         # Check to see if user provided pre-generated QuantumGraph.
@@ -86,7 +86,9 @@ def acquire_quantum_graph(config, out_prefix=""):
             if out_prefix is not None:
                 # Save a copy of the QuantumGraph file in out_prefix.
                 _LOG.info("Copying quantum graph from '%s'", input_qgraph_filename)
-                with time_this(log=_LOG, level=logging.INFO, prefix=None, msg="Completed copying quantum graph"):
+                with time_this(
+                    log=_LOG, level=logging.INFO, prefix=None, msg="Completed copying quantum graph"
+                ):
                     qgraph_filename = os.path.join(out_prefix, os.path.basename(input_qgraph_filename))
                     shutil.copy2(input_qgraph_filename, qgraph_filename)
             else:
@@ -97,12 +99,14 @@ def acquire_quantum_graph(config, out_prefix=""):
             if "finalJob" in config:
                 update_quantum_graph(config, qgraph_filename, out_prefix)
 
-            # Copy Execution Butler if user provided (shouldn't provide execution
-            # butler if not providing QuantumGraph)
+            # Copy Execution Butler if user provided (shouldn't provide
+            # execution butler if not providing QuantumGraph)
             if when_create.upper() == "USER_PROVIDED":
                 found, user_exec_butler_dir = config.search(".executionButler.executionButlerDir")
                 if not found:
-                    raise KeyError("Missing .executionButler.executionButlerDir for when_create == USER_PROVIDED")
+                    raise KeyError(
+                        "Missing .executionButler.executionButlerDir for when_create == USER_PROVIDED"
+                    )
 
                 # Save a copy of the execution butler file in out_prefix.
                 _LOG.info("Copying execution butler to '%s'", user_exec_butler_dir)

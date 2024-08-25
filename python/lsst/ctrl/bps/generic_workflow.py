@@ -783,7 +783,7 @@ class GenericWorkflow(DiGraph):
             Information needed to execute final job(s).
         """
         return self._custom
-    
+
     def add_executable(self, executable):
         """Add executable to workflow's list of executables.
 

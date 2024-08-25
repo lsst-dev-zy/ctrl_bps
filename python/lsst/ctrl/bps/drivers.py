@@ -261,7 +261,7 @@ def cluster_qgraph_driver(config_file, **kwargs):
     """
     config, qgraph = acquire_qgraph_driver(config_file, **kwargs)
     _, submit_cmd = config.search("submitCmd", opt={"default": False})
-    
+
     if submit_cmd:
         clustered_qgraph = None
     else:
