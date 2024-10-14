@@ -964,7 +964,7 @@ def _make_final_job_creator(job_name, create_cmd):
         gwjob = GenericWorkflowJob(job_name, label=job_name)
 
         search_opt = {"searchobj": config[job_name], "curvals": {}, "default": None}
-        print(f"aaaaaaaaaa {config[job_name]}")
+
         found, value = config.search("computeSite", opt=search_opt)
         if found:
             search_opt["curvals"]["curr_site"] = value
