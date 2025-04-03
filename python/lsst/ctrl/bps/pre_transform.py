@@ -115,7 +115,7 @@ def execute(command, filename):
         print(command, file=fh)
         print("\n", file=fh)  # Note: want a blank line
         process = subprocess.Popen(
-            shlex.split(command), shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+            command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         )
         buffer = os.read(process.stdout.fileno(), buffer_size).decode()
         while process.poll is None or buffer:
